@@ -119,6 +119,35 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("keeps standard unified diff output when hashline mode is enabled", async () => {
+    const previous = process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"]
+    process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"] = "1"
+    try {
+      await using fixture = await tmpdir()
+      const { ctx, calls } = makeCtx()
+
+      await Instance.provide({
+        directory: fixture.path,
+        fn: async () => {
+          const target = path.join(fixture.path, "hash.txt")
+          await fs.writeFile(target, "alpha\n", "utf-8")
+
+          const patchText = "*** Begin Patch\n*** Update File: hash.txt\n@@\n-alpha\n+beta\n*** End Patch"
+
+          const result = await execute({ patchText }, ctx)
+          expect(calls.length).toBe(1)
+          expect(result.metadata.diff).toContain("-alpha")
+          expect(result.metadata.diff).toContain("+beta")
+          expect(calls[0].metadata.diff).toContain("-alpha")
+          expect(calls[0].metadata.diff).toContain("+beta")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"]
+      else process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"] = previous
+    }
+  })
+
   test("permission metadata includes move file info", async () => {
     await using fixture = await tmpdir({ git: true })
     const { ctx, calls } = makeCtx()
