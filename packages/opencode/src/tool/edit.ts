@@ -17,6 +17,8 @@ import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Snapshot } from "@/snapshot"
 import { assertExternalDirectory } from "./external-directory"
+import { Config } from "../config/config"
+import { isHashlineEditEnabled, resolveHashlineOldString, stripHashlinePrefixes } from "./hashline"
 
 const MAX_DIAGNOSTICS_PER_FILE = 20
 
@@ -44,13 +46,15 @@ export const EditTool = Tool.define("edit", {
     const filePath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
     await assertExternalDirectory(ctx, filePath)
 
+    const hashlineEdit = isHashlineEditEnabled(await Config.get())
+
     let diff = ""
     let contentOld = ""
     let contentNew = ""
     await FileTime.withLock(filePath, async () => {
       if (params.oldString === "") {
         const existed = await Filesystem.exists(filePath)
-        contentNew = params.newString
+        contentNew = hashlineEdit ? stripHashlinePrefixes(params.newString) : params.newString
         diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
         await ctx.ask({
           permission: "edit",
@@ -59,9 +63,10 @@ export const EditTool = Tool.define("edit", {
           metadata: {
             filepath: filePath,
             diff,
+            hashline: hashlineEdit,
           },
         })
-        await Filesystem.write(filePath, params.newString)
+        await Filesystem.write(filePath, contentNew)
         await Bus.publish(File.Event.Edited, {
           file: filePath,
         })
@@ -78,7 +83,9 @@ export const EditTool = Tool.define("edit", {
       if (stats.isDirectory()) throw new Error(`Path is a directory, not a file: ${filePath}`)
       await FileTime.assert(ctx.sessionID, filePath)
       contentOld = await Filesystem.readText(filePath)
-      contentNew = replace(contentOld, params.oldString, params.newString, params.replaceAll)
+      const oldString = hashlineEdit ? resolveHashlineOldString(params.oldString, contentOld) : params.oldString
+      const newString = hashlineEdit ? stripHashlinePrefixes(params.newString) : params.newString
+      contentNew = replace(contentOld, oldString, newString, params.replaceAll)
 
       diff = trimDiff(
         createTwoFilesPatch(filePath, filePath, normalizeLineEndings(contentOld), normalizeLineEndings(contentNew)),
@@ -90,6 +97,7 @@ export const EditTool = Tool.define("edit", {
         metadata: {
           filepath: filePath,
           diff,
+          hashline: hashlineEdit,
         },
       })
 
@@ -125,6 +133,7 @@ export const EditTool = Tool.define("edit", {
         diff,
         filediff,
         diagnostics: {},
+        hashline: hashlineEdit,
       },
     })
 
@@ -146,6 +155,7 @@ export const EditTool = Tool.define("edit", {
         diagnostics,
         diff,
         filediff,
+        hashline: hashlineEdit,
       },
       title: `${path.relative(Instance.worktree, filePath)}`,
       output,

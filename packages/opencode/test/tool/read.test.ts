@@ -466,6 +466,33 @@ describe("tool.read loaded instructions", () => {
   })
 })
 
+describe("tool.read hashline mode", () => {
+  test("returns hashline-prefixed output when experimental.hashline_edit is enabled", async () => {
+    const previous = process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"]
+    process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"] = "1"
+    try {
+      await using tmp = await tmpdir({
+        init: async (dir) => {
+          await Bun.write(path.join(dir, "hashline.txt"), "alpha\nbeta")
+        },
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const read = await ReadTool.init()
+          const result = await read.execute({ filePath: path.join(tmp.path, "hashline.txt") }, ctx)
+          expect(result.output).toMatch(/1#[A-Z]{2}:alpha/)
+          expect(result.output).toMatch(/2#[A-Z]{2}:beta/)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"]
+      else process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"] = previous
+    }
+  })
+})
+
 describe("tool.read binary detection", () => {
   test("rejects text extension files with null bytes", async () => {
     await using tmp = await tmpdir({

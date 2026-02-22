@@ -119,4 +119,26 @@ describe("tool.registry", () => {
       },
     })
   })
+
+  test("uses hashline edit routing when experimental.hashline_edit is enabled", async () => {
+    const previous = process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"]
+    process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"] = "1"
+    try {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const tools = await ToolRegistry.tools({ providerID: "openai", modelID: "gpt-5" })
+          const ids = tools.map((tool) => tool.id)
+          expect(ids).toContain("edit")
+          expect(ids).toContain("write")
+          expect(ids).not.toContain("apply_patch")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"]
+      else process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"] = previous
+    }
+  })
 })

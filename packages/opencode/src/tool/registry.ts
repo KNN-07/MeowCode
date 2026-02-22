@@ -28,6 +28,7 @@ import { Truncate } from "./truncation"
 import { PlanExitTool, PlanEnterTool } from "./plan"
 import { ApplyPatchTool } from "./apply_patch"
 import { Glob } from "../util/glob"
+import { isHashlineEditEnabled } from "./hashline"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -134,6 +135,7 @@ export namespace ToolRegistry {
     agent?: Agent.Info,
   ) {
     const tools = await all()
+    const config = await Config.get()
     const result = await Promise.all(
       tools
         .filter((t) => {
@@ -145,8 +147,9 @@ export namespace ToolRegistry {
           // use apply tool in same format as codex
           const usePatch =
             model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
-          if (t.id === "apply_patch") return usePatch
-          if (t.id === "edit" || t.id === "write") return !usePatch
+          const useHashlineEdit = isHashlineEditEnabled(config)
+          if (t.id === "apply_patch") return useHashlineEdit ? false : usePatch
+          if (t.id === "edit" || t.id === "write") return useHashlineEdit ? true : !usePatch
 
           return true
         })

@@ -5,6 +5,7 @@ import { EditTool } from "../../src/tool/edit"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { FileTime } from "../../src/file/time"
+import { computeHashline } from "../../src/tool/hashline"
 
 const ctx = {
   sessionID: "test-edit-session",
@@ -491,6 +492,73 @@ describe("tool.edit", () => {
           expect(results.some((r) => r.status === "fulfilled")).toBe(true)
         },
       })
+    })
+  })
+
+  describe("hashline mode", () => {
+    test("accepts hashline oldString and validates hash before editing", async () => {
+      const previous = process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"]
+      process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"] = "1"
+      try {
+        await using tmp = await tmpdir()
+        const filepath = path.join(tmp.path, "hashline.txt")
+        await fs.writeFile(filepath, "alpha\nbeta", "utf-8")
+
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            FileTime.read(ctx.sessionID, filepath)
+            const hash = computeHashline(1, "alpha")
+            const edit = await EditTool.init()
+            const result = await edit.execute(
+              {
+                filePath: filepath,
+                oldString: `1#${hash}:alpha`,
+                newString: "updated",
+              },
+              ctx,
+            )
+
+            const content = await fs.readFile(filepath, "utf-8")
+            expect(content).toBe("updated\nbeta")
+            expect(result.metadata.hashline).toBe(true)
+          },
+        })
+      } finally {
+        if (previous === undefined) delete process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"]
+        else process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"] = previous
+      }
+    })
+
+    test("throws on stale hashline references", async () => {
+      const previous = process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"]
+      process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"] = "1"
+      try {
+        await using tmp = await tmpdir()
+        const filepath = path.join(tmp.path, "stale.txt")
+        await fs.writeFile(filepath, "alpha", "utf-8")
+
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            FileTime.read(ctx.sessionID, filepath)
+            const edit = await EditTool.init()
+            await expect(
+              edit.execute(
+                {
+                  filePath: filepath,
+                  oldString: "1#ZZ:alpha",
+                  newString: "updated",
+                },
+                ctx,
+              ),
+            ).rejects.toThrow("Hashline mismatch")
+          },
+        })
+      } finally {
+        if (previous === undefined) delete process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"]
+        else process.env["OPENCODE_EXPERIMENTAL_HASHLINE_EDIT"] = previous
+      }
     })
   })
 })

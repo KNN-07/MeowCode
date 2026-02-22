@@ -1186,6 +1186,10 @@ export namespace Config {
         .object({
           disable_paste_summary: z.boolean().optional(),
           batch_tool: z.boolean().optional().describe("Enable the batch tool"),
+          hashline_edit: z
+            .boolean()
+            .optional()
+            .describe("Enable hashline mode and replace normal apply_patch routing with read/edit/write tools"),
           openTelemetry: z
             .boolean()
             .optional()
