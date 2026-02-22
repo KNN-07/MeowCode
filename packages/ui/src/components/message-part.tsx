@@ -1481,6 +1481,10 @@ ToolRegistry.register({
     const diagnostics = createMemo(() => getDiagnostics(props.metadata.diagnostics, props.input.filePath))
     const filename = () => getFilename(props.input.filePath ?? "")
     const pending = () => props.status === "pending" || props.status === "running"
+    const title = () =>
+      props.metadata?.hashline === true
+        ? `${i18n.t("ui.messagePart.title.edit")} (HashLine)`
+        : i18n.t("ui.messagePart.title.edit")
     return (
       <BasicTool
         {...props}
@@ -1491,8 +1495,8 @@ ToolRegistry.register({
             <div data-slot="message-part-title-area">
               <div data-slot="message-part-title">
                 <span data-slot="message-part-title-text">
-                  <Show when={pending()} fallback={i18n.t("ui.messagePart.title.edit")}>
-                    <TextShimmer text={i18n.t("ui.messagePart.title.edit")} />
+                  <Show when={pending()} fallback={title()}>
+                    <TextShimmer text={title()} />
                   </Show>
                 </span>
                 <Show when={!pending()}>
